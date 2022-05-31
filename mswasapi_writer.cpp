@@ -43,9 +43,6 @@ static const int flowControlInterval = 5000; // ms
 static const int flowControlThreshold = 40; // ms
 static const int minBufferDurationMs = 200; // ms
 
-bool MSWASAPIWriter::smInstantiated = false;
-
-
 MSWASAPIWriter::MSWASAPIWriter()
 	:  MSWasapi("output"), mAudioRenderClient(NULL), mVolumeControler(NULL), mBufferFrameCount(0), mIsInitialized(false), mIsActivated(false), mIsStarted(false)
 {
@@ -70,7 +67,6 @@ MSWASAPIWriter::~MSWASAPIWriter()
 		mActivationEvent = INVALID_HANDLE_VALUE;
 	}
 #endif
-	smInstantiated = false;
 }
 
 
@@ -89,10 +85,6 @@ void MSWASAPIWriter::init(LPCWSTR id, MSFilter *f) {
 		ms_error("Could not get the RenderID of the MSWASAPI audio output interface");
 		goto error;
 	}
-	if (smInstantiated) {
-		ms_error("An MSWASAPIWriter is already instantiated. A second one can not be created.");
-		goto error;
-	}
 	result = ActivateAudioInterfaceAsync(mRenderId->Data(), IID_IAudioClient2, NULL, this, &asyncOp);
 	REPORT_ERROR("Could not activate the MSWASAPI audio output interface [%i]", result);
 	WaitForSingleObjectEx(mActivationEvent, INFINITE, FALSE);
@@ -106,12 +98,6 @@ void MSWASAPIWriter::init(LPCWSTR id, MSFilter *f) {
 		ms_error("Could not get the RenderId of the MSWASAPI audio output interface");
 		goto error;
 	}
-
-	if (smInstantiated) {
-		ms_error("An MSWASAPIWriter is already instantiated. A second one can not be created.");
-		goto error;
-	}
-
 	result = ActivateAudioInterface(mRenderId, IID_IAudioClient2, (void **)&mAudioClient);
 	REPORT_ERROR("Could not activate the MSWASAPI audio output interface [%i]", result);
 #else
@@ -143,11 +129,10 @@ void MSWASAPIWriter::init(LPCWSTR id, MSFilter *f) {
 	
 	useBestFormat = true;
 error:
-	updateFormat(useBestFormat);
-	
-	mIsInitialized = true;
-	smInstantiated = true;
-	activate();
+	if(updateFormat(useBestFormat)){
+		mIsInitialized = true;
+		activate();
+	}
 	return;
 }
 
@@ -385,7 +370,6 @@ MSWASAPIWriterPtr MSWASAPIWriterNew()
 }
 void MSWASAPIWriterDelete(MSWASAPIWriterPtr ptr)
 {
-	ptr->writer->setAsNotInstantiated();
 	ptr->writer = nullptr;
 	delete ptr;
 }

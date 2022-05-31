@@ -104,7 +104,10 @@ MSWasapi::MSWasapi(const std::string& mediaDirectionStr) : mAudioClient(NULL){
 }
 
 
-void MSWasapi::updateFormat(bool useBestFormat){
+bool MSWasapi::updateFormat(bool useBestFormat){
+	bool ok = false;
+	if(!mAudioClient) goto error;
+	ok = true;
 	if(useBestFormat ) {
 		useBestFormat = false;
 		WAVEFORMATEX *pWfx = NULL;
@@ -123,6 +126,7 @@ error:
 		mNChannels = 1;
 	}
 	mNBlockAlign = mWBitsPerSample * mNChannels / 8;
+	return ok;
 }
 
 WAVEFORMATPCMEX MSWasapi::buildFormat() const{

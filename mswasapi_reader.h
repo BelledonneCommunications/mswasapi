@@ -55,7 +55,6 @@ public:
 	void setVolumeLevel(float volume);
 
 #ifdef MS2_WINDOWS_UNIVERSAL
-	void setAsNotInstantiated() { smInstantiated = false; }
 
 	// IActivateAudioInterfaceCompletionHandler
 	STDMETHOD(ActivateCompleted)(IActivateAudioInterfaceAsyncOperation *operation);
@@ -63,7 +62,6 @@ public:
 private:
 	void silence(MSFilter *f);
 
-	static bool smInstantiated;
 #ifdef MS2_WINDOWS_UNIVERSAL
 	Platform::String^ mCaptureId;
 	HANDLE mActivationEvent;

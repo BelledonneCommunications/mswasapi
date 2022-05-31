@@ -38,11 +38,6 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 	}
 
 
-bool MSWASAPIReader::smInstantiated = false;
-
-
-
-
 MSWASAPIReader::MSWASAPIReader(MSFilter *filter)
 	: MSWasapi("input"), mAudioCaptureClient(NULL), mVolumeControler(NULL), mBufferFrameCount(0), mIsInitialized(false), mIsActivated(false), mIsStarted(false), mFilter(filter)
 {
@@ -69,7 +64,6 @@ MSWASAPIReader::~MSWASAPIReader()
 	}
 #endif
 	ms_ticker_synchronizer_destroy(mTickerSynchronizer);
-	smInstantiated = false;
 }
 
 
@@ -89,10 +83,6 @@ void MSWASAPIReader::init(LPCWSTR id)
 		ms_error("Could not get the CaptureID of the MSWASAPI audio input interface");
 		goto error;
 	}
-	if (smInstantiated) {
-		ms_error("An MSWASAPIReader is already instantiated. A second one can not be created.");
-		goto error;
-	}
 	result = ActivateAudioInterfaceAsync(mCaptureId->Data(), IID_IAudioClient2, NULL, this, &asyncOp);
 	REPORT_ERROR("Could not activate the MSWASAPI audio input interface [%i]", result);
 	WaitForSingleObjectEx(mActivationEvent, INFINITE, FALSE);
@@ -104,11 +94,6 @@ void MSWASAPIReader::init(LPCWSTR id)
 	mCaptureId = GetDefaultAudioCaptureId(Communications);
 	if (mCaptureId == NULL) {
 		ms_error("Could not get the CaptureId of the MSWASAPI audio input interface");
-		goto error;
-	}
-
-	if (smInstantiated) {
-		ms_error("An MSWASAPIReader is already instantiated. A second one can not be created.");
 		goto error;
 	}
 
@@ -142,11 +127,10 @@ void MSWASAPIReader::init(LPCWSTR id)
 #endif
 	useBestFormat = true;
 error:
-	updateFormat(useBestFormat);
-	
-	mIsInitialized = true;
-	smInstantiated = true;
-	activate();
+	if(updateFormat(useBestFormat)){
+		mIsInitialized = true;
+		activate();
+	}
 	return;
 }
 
@@ -381,7 +365,6 @@ MSWASAPIReaderPtr MSWASAPIReaderNew(MSFilter *f)
 }
 void MSWASAPIReaderDelete(MSWASAPIReaderPtr ptr)
 {
-	ptr->reader->setAsNotInstantiated();
 	ptr->reader = nullptr;
 	delete ptr;
 }

@@ -87,7 +87,7 @@ public:
 #if !defined(MS2_WINDOWS_PHONE) && !defined(MS2_WINDOWS_UNIVERSAL)	
 	void changePolicies(IMMDevice *device);
 #endif
-	void updateFormat(bool useBestFormat);
+	bool updateFormat(bool useBestFormat);// return true if no error occured
 	WAVEFORMATPCMEX buildFormat() const;
 };
 
