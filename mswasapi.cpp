@@ -192,7 +192,7 @@ static int ms_wasapi_read_get_sample_rate(MSFilter *f, void *arg) {
 	return 0;
 }
 
-static int ms_wasapi_read_set_sample_rate(UNUSED(MSFilter *f), UNUSED(void *arg)) {
+static int ms_wasapi_read_set_sample_rate(BCTBX_UNUSED(MSFilter *f), BCTBX_UNUSED(void *arg)) {
 	/* This is not supported: the Audio Client requires to use the native sample rate. */
 	int sampleRate = 0;
 	ms_wasapi_read_get_sample_rate(f, &sampleRate);
@@ -208,7 +208,7 @@ static int ms_wasapi_read_get_nchannels(MSFilter *f, void *arg) {
 	return 0;
 }
 
-static int ms_wasapi_read_set_nchannels(UNUSED(MSFilter *f), UNUSED(void *arg)) {
+static int ms_wasapi_read_set_nchannels(BCTBX_UNUSED(MSFilter *f), BCTBX_UNUSED(void *arg)) {
 	/* This is not supported: the Audio Client requires to use 2 channels. */
 	int channelCount = 2;
 	ms_wasapi_read_get_nchannels(f, &channelCount);
@@ -341,7 +341,7 @@ static int ms_wasapi_write_get_sample_rate(MSFilter *f, void *arg) {
 	return 0;
 }
 
-static int ms_wasapi_write_set_sample_rate(UNUSED(MSFilter *f), UNUSED(void *arg)) {
+static int ms_wasapi_write_set_sample_rate(BCTBX_UNUSED(MSFilter *f), BCTBX_UNUSED(void *arg)) {
 	/* This is not supported: the Audio Client requires to use the native sample rate. */
 	int sampleRate = 0;
 	ms_wasapi_write_get_sample_rate(f, &sampleRate);
@@ -357,7 +357,7 @@ static int ms_wasapi_write_get_nchannels(MSFilter *f, void *arg) {
 	return 0;
 }
 
-static int ms_wasapi_write_set_nchannels(UNUSED(MSFilter *f), UNUSED(void *arg)) {
+static int ms_wasapi_write_set_nchannels(BCTBX_UNUSED(MSFilter *f), BCTBX_UNUSED(void *arg)) {
 	/* This is not supported: the Audio Client requires to use 2 channels. */
 	int channelCount = 2;
 	ms_wasapi_write_get_nchannels(f, &channelCount);
