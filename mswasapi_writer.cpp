@@ -214,6 +214,7 @@ error:
 int MSWASAPIWriter::deactivate()
 {
 	RELEASE_CLIENT(mAudioRenderClient);
+	RELEASE_CLIENT(mVolumeControler);
 	mIsActivated = false;
 	return 0;
 }
