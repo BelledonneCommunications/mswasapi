@@ -49,6 +49,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 const IID IID_IAudioCaptureClient = __uuidof(IAudioCaptureClient);
 const IID IID_IAudioRenderClient = __uuidof(IAudioRenderClient);
 const IID IID_ISimpleAudioVolume = __uuidof(ISimpleAudioVolume);
+const IID IID_IAudioClock = __uuidof(IAudioClock);
 #if defined(MS2_WINDOWS_PHONE) || defined(MS2_WINDOWS_UNIVERSAL) || defined(MS2_WINDOWS_UWP)
 const IID IID_IAudioClient2 = __uuidof(IAudioClient2);
 #else
@@ -430,7 +431,7 @@ error:
 		// Initialize the frame rate and the number of channels to be able to generate silence.
 		if (mTargetRate != 8000) { // Read
 			mTargetRate = 8000;    // Write
-		}                          // Avoid to use writting operation if not needed.
+		} // Avoid to use writting operation if not needed.
 		if (mTargetNChannels != 1) {
 			mTargetNChannels = 1;
 		}
@@ -553,10 +554,10 @@ HRESULT MSWasapi::ActivateCompleted(IActivateAudioInterfaceAsyncOperation *opera
 		if (mAudioClient == NULL) {
 			hr = E_FAIL;
 			goto exit;
-		}else{
-			if(mStreamCategory != AudioCategory_Other){
+		} else {
+			if (mStreamCategory != AudioCategory_Other) {
 				AudioClientProperties prop = {0};
-				prop.eCategory = mStreamCategory ;
+				prop.eCategory = mStreamCategory;
 				mAudioClient->SetClientProperties(&prop);
 			}
 		}
@@ -1050,7 +1051,8 @@ private:
 
 #else
 
-static MSSndCard *ms_wasapi_snd_card_new(LPWSTR id, const char *name, uint8_t capabilities, AUDIO_STREAM_CATEGORY streamCategory, bool isDefault) {
+static MSSndCard *ms_wasapi_snd_card_new(
+    LPWSTR id, const char *name, uint8_t capabilities, AUDIO_STREAM_CATEGORY streamCategory, bool isDefault) {
 	MSSndCard *card = ms_snd_card_new(&ms_wasapi_snd_card_desc);
 	WasapiSndCard *wasapicard = static_cast<WasapiSndCard *>(card->data);
 	card->name = ms_strdup(name);
@@ -1064,8 +1066,13 @@ static MSSndCard *ms_wasapi_snd_card_new(LPWSTR id, const char *name, uint8_t ca
 	return card;
 }
 
-static void add_or_update_card(
-    MSSndCardManager *m, bctbx_list_t **l, LPWSTR id, LPWSTR wname, EDataFlow data_flow, AUDIO_STREAM_CATEGORY streamCategory, bool isDefault) {
+static void add_or_update_card(MSSndCardManager *m,
+                               bctbx_list_t **l,
+                               LPWSTR id,
+                               LPWSTR wname,
+                               EDataFlow data_flow,
+                               AUDIO_STREAM_CATEGORY streamCategory,
+                               bool isDefault) {
 	MSSndCard *card;
 	const bctbx_list_t *elem = *l;
 	uint8_t capabilities = 0;
@@ -1095,8 +1102,7 @@ static void add_or_update_card(
 	}
 
 	if (isDefault) {
-		name = ms_strdup_printf("Default %s",
-		                        (data_flow == eCapture ? "Capture" : "Playback"));
+		name = ms_strdup_printf("Default %s", (data_flow == eCapture ? "Capture" : "Playback"));
 	} else name = ms_strdup(nameStr);
 	switch (data_flow) {
 		case eRender:
@@ -1136,8 +1142,12 @@ error:
 	}
 }
 
-static void add_endpoint(
-	MSSndCardManager *m, EDataFlow data_flow, bctbx_list_t **l, IMMDevice *pEndpoint, AUDIO_STREAM_CATEGORY streamCategory, bool isDefault) {
+static void add_endpoint(MSSndCardManager *m,
+                         EDataFlow data_flow,
+                         bctbx_list_t **l,
+                         IMMDevice *pEndpoint,
+                         AUDIO_STREAM_CATEGORY streamCategory,
+                         bool isDefault) {
 	IPropertyStore *pProps = NULL;
 	LPWSTR pwszID = NULL;
 	HRESULT result;
@@ -1181,7 +1191,8 @@ static void ms_wasapi_snd_card_detect_with_data_flow(MSSndCardManager *m, EDataF
 	REPORT_ERROR("mswasapi: Could not create an instance of the device enumerator", result);
 	result = pEnumerator->GetDefaultAudioEndpoint(data_flow, eCommunications, &pEndpoint);
 	if (result == S_OK) {
-		add_endpoint(m, data_flow, l, pEndpoint, AudioCategory_Communications, true);	// Follow communication stream for default devices
+		add_endpoint(m, data_flow, l, pEndpoint, AudioCategory_Communications,
+		             true); // Follow communication stream for default devices
 		SAFE_RELEASE(pEndpoint);
 	}
 	result = pEnumerator->EnumAudioEndpoints(data_flow, DEVICE_STATE_ACTIVE, &pCollection);
@@ -1196,7 +1207,9 @@ static void ms_wasapi_snd_card_detect_with_data_flow(MSSndCardManager *m, EDataF
 	for (ULONG i = 0; i < count; i++) {
 		result = pCollection->Item(i, &pEndpoint);
 		REPORT_ERROR("mswasapi: Could not get pointer to audio endpoint", result);
-		add_endpoint(m, data_flow, l, pEndpoint, AudioCategory_Other, false);// AudioCategory_Other will not override stream category of the audio session for this end point
+		add_endpoint(
+		    m, data_flow, l, pEndpoint, AudioCategory_Other,
+		    false); // AudioCategory_Other will not override stream category of the audio session for this end point
 		SAFE_RELEASE(pEndpoint);
 	}
 error:

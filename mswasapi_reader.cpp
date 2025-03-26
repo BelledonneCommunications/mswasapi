@@ -41,7 +41,8 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 bool MSWASAPIReader::smInstantiated = false;
 #endif
 
-MSWASAPIReader::MSWASAPIReader(MSFilter *filter) : MSWasapi(filter, "input"), mAudioCaptureClient(NULL) {
+MSWASAPIReader::MSWASAPIReader(MSFilter *filter)
+    : MSWasapi(filter, "input"), mAudioCaptureClient(NULL), mAudioClock(NULL) {
 	mTickerSynchronizer = ms_ticker_synchronizer_new();
 }
 
@@ -108,14 +109,22 @@ int MSWASAPIReader::activate() {
 	result = mAudioClient->GetService(IID_IAudioCaptureClient, (void **)&mAudioCaptureClient);
 	REPORT_ERROR("mswasapi: Could not get render service from the MSWASAPI audio input interface [%x]", result);
 	result = mAudioClient->GetService(IID_ISimpleAudioVolume, (void **)&mVolumeController);
-	REPORT_ERROR_NOGOTO("mswasapi: Could not get volume control service from the MSWASAPI audio input interface [%x]", result);
+	REPORT_ERROR_NOGOTO("mswasapi: Could not get volume control service from the MSWASAPI audio input interface [%x]",
+	                    result);
+
+	result = mAudioClient->GetService(IID_IAudioClock, (void **)&mAudioClock);
+	REPORT_ERROR_NOGOTO("mswasapi: Could not get monitor monitor stream's data rate and the current position for the "
+	                    "input interface [%x]",
+	                    result);
 	result = mAudioClient->GetService(__uuidof(IAudioSessionControl), (void **)&mAudioSessionControl);
-	REPORT_ERROR_NOGOTO("mswasapi: Could not get audio session control service from the MSWASAPI audio input interface [%x]",
-	             result);
-	if (mAudioSessionControl != nullptr){
+	REPORT_ERROR_NOGOTO(
+	    "mswasapi: Could not get audio session control service from the MSWASAPI audio input interface [%x]", result);
+	if (mAudioSessionControl != nullptr) {
 		result = mAudioSessionControl->RegisterAudioSessionNotification(this);
-		REPORT_ERROR_NOGOTO("mswasapi: Could not register to Audio Session from the MSWASAPI audio input interface [%x]", result);
+		REPORT_ERROR_NOGOTO(
+		    "mswasapi: Could not register to Audio Session from the MSWASAPI audio input interface [%x]", result);
 	}
+
 	mIsActivated = true;
 	ms_message("mswasapi: capture initialized for [%s] at %i Hz, %i channels, with buffer size %i (%i ms), %i-bit "
 	           "frames are on %i bits",
@@ -132,6 +141,7 @@ error:
 }
 
 int MSWASAPIReader::deactivate() {
+	RELEASE_CLIENT(mAudioClock);
 	RELEASE_CLIENT(mAudioCaptureClient);
 	RELEASE_CLIENT(mVolumeController);
 	if (mAudioSessionControl) {
@@ -159,9 +169,13 @@ int MSWASAPIReader::feed(MSFilter *f) {
 	HRESULT result;
 	DWORD flags;
 	BYTE *pData;
-	UINT32 numFramesAvailable;
+	UINT32 numFramesAvailable = 0;
 	UINT32 numFramesInNextPacket = 0;
-	UINT64 devicePosition = (UINT64)-1;
+	UINT64 bufferDevicePosition = (UINT64)-1; // Coming from GetBuffer
+	UINT64 deviceFrequency = 0;
+	UINT64 realDevicePosition = (UINT64)-1;  // Coming from AudioClock
+	UINT64 finalDevicePosition = (UINT64)-1; // AudioClock (best precision, based on hardware capability) > Buffer
+	                                         // position (less reliable) > manual counting (in case of error)
 	mblk_t *m;
 	int bytesPerFrame = mNBlockAlign;
 
@@ -170,10 +184,38 @@ int MSWASAPIReader::feed(MSFilter *f) {
 		while (numFramesInNextPacket != 0) {
 			REPORT_ERROR("mswasapi: Could not get next packet size for the MSWASAPI audio input interface [%x]",
 			             result);
-
-			result = mAudioCaptureClient->GetBuffer(&pData, &numFramesAvailable, &flags, &devicePosition, NULL);
+			result = mAudioCaptureClient->GetBuffer(&pData, &numFramesAvailable, &flags, &bufferDevicePosition, NULL);
 			REPORT_ERROR("mswasapi: Could not get buffer from the MSWASAPI audio input interface [%x]", result);
 			if (numFramesAvailable > 0) {
+				finalDevicePosition = bufferDevicePosition;
+				// Ticker has been desynchronized either by not setting the device position, or by being erroneous.
+				// It's supposed that when having an error, the position from Clock/GetBuffer cannot be reliable.
+				// Frame counting is done since then.
+				if (mSampleTime != (UINT64)-1) {
+					mSampleTime += numFramesAvailable;
+					finalDevicePosition = mSampleTime;
+				}else {
+					bool_t haveDevicePosition = FALSE;
+					if (mAudioClock) {
+						// Frequency and Position must be get from Audio Clock both because they are meaning only between
+						// them:  The device position from Buffer() can be decorrelated from the AudioClock.
+						result = mAudioClock->GetFrequency(&deviceFrequency);
+						if (result == S_OK && deviceFrequency > 0) {
+							result = mAudioClock->GetPosition(&realDevicePosition, NULL);
+							if (result == S_OK) {
+								finalDevicePosition =
+									(UINT64)(realDevicePosition * mCurrentRate / (long double)deviceFrequency);
+								haveDevicePosition = TRUE;
+							}
+						}
+					}
+					if(!haveDevicePosition && ((flags & AUDCLNT_BUFFERFLAGS_TIMESTAMP_ERROR) || bufferDevicePosition == (UINT64)-1)) {
+						ms_warning("mswasapi: Timestamp is erroneous. Switch to frame counting.");
+						mSampleTime = numFramesAvailable;
+						finalDevicePosition = mSampleTime;
+						ms_ticker_synchronizer_resync(mTickerSynchronizer);
+					}
+				}
 				m = allocb(numFramesAvailable * bytesPerFrame, 0);
 				if (m == NULL) {
 					ms_error("mswasapi: Could not allocate memory for the captured data from the MSWASAPI audio input "
@@ -190,22 +232,10 @@ int MSWASAPIReader::feed(MSFilter *f) {
 				REPORT_ERROR("mswasapi: Could not release buffer of the MSWASAPI audio input interface [%x]", result);
 
 				m->b_wptr += numFramesAvailable * bytesPerFrame;
-				// Ticker has been desynchronized either by not setting the device position, or by being erroneous.
-				// It's supposed that when having an error, the position from GetBuffer cannot be reliable.
-				// Frame counting is done since then.
-				if (mSampleTime != (UINT64)-1) {
-					mSampleTime += numFramesAvailable;
-					devicePosition = mSampleTime;
-				} else if ((flags & AUDCLNT_BUFFERFLAGS_TIMESTAMP_ERROR) || devicePosition == (UINT64)-1) {
-					ms_warning("mswasapi: Timestamp is erroneous. Switch to frame counting.");
-					mSampleTime = numFramesAvailable;
-					devicePosition = mSampleTime;
-					ms_ticker_synchronizer_resync(mTickerSynchronizer);
-				}
-
-				ms_ticker_synchronizer_update(mTickerSynchronizer, devicePosition, (unsigned int)mCurrentRate);
 
 				ms_queue_put(f->outputs[0], m);
+
+				ms_ticker_synchronizer_update(mTickerSynchronizer, finalDevicePosition, (unsigned int)mCurrentRate);
 				result = mAudioCaptureClient->GetNextPacketSize(&numFramesInNextPacket);
 			}
 		}
