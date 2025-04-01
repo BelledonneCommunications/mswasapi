@@ -37,6 +37,7 @@
 static const int minBufferDurationMs = 200; // ms
 
 const IID IID_IAudioCaptureClient = __uuidof(IAudioCaptureClient);
+const IID IID_IAudioClock = __uuidof(IAudioClock);
 const IID IID_IAudioRenderClient = __uuidof(IAudioRenderClient);
 const IID IID_ISimpleAudioVolume = __uuidof(ISimpleAudioVolume);
 #if defined(MS2_WINDOWS_PHONE) || defined(MS2_WINDOWS_UNIVERSAL) || defined(MS2_WINDOWS_UWP)
@@ -617,7 +618,7 @@ error:
 		// Initialize the frame rate and the number of channels to be able to generate silence.
 		if (mTargetRate != 8000) { // Read
 			mTargetRate = 8000;    // Write
-		}                          // Avoid to use writting operation if not needed.
+		} // Avoid to use writting operation if not needed.
 		if (mTargetNChannels != 1) {
 			mTargetNChannels = 1;
 		}
