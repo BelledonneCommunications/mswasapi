@@ -467,6 +467,7 @@ error:
 
 int MSWasapi::createAudioClient() {
 	if (mAudioClient != NULL) return -1;
+	bool cleanCo = false;
 #if defined(MS2_WINDOWS_UNIVERSAL)
 	AudioClientProperties properties = {0};
 	IActivateAudioInterfaceAsyncOperation *asyncOp;
@@ -489,6 +490,7 @@ int MSWasapi::createAudioClient() {
 #else
 	CoInitialize(NULL);
 #endif
+	cleanCo = true;
 	IActivateAudioInterfaceAsyncOperation *asyncOp = NULL;
 	if (mIsDefaultDevice) {
 		HRESULT result = ActivateAudioInterfaceAsync(mDeviceId, __uuidof(IAudioClient2), NULL, this, &asyncOp);
@@ -525,10 +527,10 @@ int MSWasapi::createAudioClient() {
 	    ("mswasapi: Could not set properties of the MSWASAPI audio " + mMediaDirectionStr + " interface [%x]").c_str(),
 	    result);
 #endif
-	CoUninitialize();
+	if(cleanCo)	CoUninitialize();
 	return 0;
 error:
-	CoUninitialize();
+	if(cleanCo)	CoUninitialize();
 	return -1;
 }
 
@@ -666,7 +668,9 @@ WAVEFORMATPCMEX MSWasapi::buildFormat() const {
 }
 
 bool MSWasapi::isCurrentFormatUsable() const {
+	bool cleanCo = false;
 #if !defined(MS2_WINDOWS_UNIVERSAL)
+	cleanCo = true;
 #if defined(ENABLE_MICROSOFT_STORE_APP) || defined(MS2_WINDOWS_UNIVERSAL)
 	CoInitializeEx(NULL, COINIT_MULTITHREADED);
 #else
@@ -678,6 +682,7 @@ bool MSWasapi::isCurrentFormatUsable() const {
 	HRESULT result =
 	    mAudioClient->IsFormatSupported(AUDCLNT_SHAREMODE_SHARED, (WAVEFORMATEX *)&proposedWfx, &pSupportedWfx);
 	FREE_PTR(pSupportedWfx);
+	if (cleanCo) CoUninitialize();
 	return result == S_OK;
 }
 
